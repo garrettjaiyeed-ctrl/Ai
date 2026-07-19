@@ -34,35 +34,56 @@ class BrowserManager {
   async scanVisibleComments() {
     if (!this.page) throw new Error('Open TikTok first.');
 
-    await this.page.waitForTimeout(1200);
+    await this.page.waitForTimeout(1500);
 
     const raw = await this.page.evaluate(() => {
-      const selectors = [
-        '[data-e2e="comment-level-1"]',
-        '[data-e2e="comment-item"]',
-        'div[class*="DivCommentItemContainer"]',
-        'div[class*="CommentItem"]'
-      ];
+      const clean = (value) => (value || '').replace(/\s+/g, ' ').trim();
+      const results = [];
+      const seen = new Set();
 
-      let nodes = [];
-      for (const selector of selectors) {
-        const found = Array.from(document.querySelectorAll(selector));
-        if (found.length > nodes.length) nodes = found;
-      }
+      const addResult = (textElement, container, index) => {
+        const text = clean(textElement?.innerText || textElement?.textContent);
+        if (!text || text.length > 1000) return;
 
-      const visible = (element) => {
-        const style = window.getComputedStyle(element);
-        const rect = element.getBoundingClientRect();
-        return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
+        const authorElement = container?.querySelector(
+          '[data-e2e="comment-username-1"], [data-e2e*="comment-username"], a[href^="/@"], a[href*="tiktok.com/@"]'
+        );
+        const author = clean(authorElement?.innerText || authorElement?.textContent) || 'TikTok user';
+        const key = `${author}|${text}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        results.push({ text, author, domIndex: index });
       };
 
-      return nodes.filter(visible).map((node, index) => {
-        const textNode = node.querySelector('[data-e2e="comment-level-1"] p, [data-e2e="comment-item"] p, p[class*="CommentText"], span[data-e2e="comment-level-1"]') || node.querySelector('p');
-        const authorNode = node.querySelector('a[href*="/@"], [data-e2e="comment-username-1"], span[class*="Author"]');
-        const text = (textNode?.innerText || '').trim();
-        const author = (authorNode?.innerText || 'TikTok user').trim();
-        return { text, author, domIndex: index };
-      }).filter((item) => item.text.length > 0 && item.text.length < 1000);
+      // TikTok commonly places data-e2e="comment-level-1" on the text itself,
+      // rather than on the full comment container.
+      const directTextNodes = Array.from(document.querySelectorAll(
+        '[data-e2e="comment-level-1"], [data-e2e="comment-level-2"], [data-e2e*="comment-text"]'
+      ));
+
+      directTextNodes.forEach((textElement, index) => {
+        const container = textElement.closest(
+          '[data-e2e="comment-item"], [data-e2e*="comment-level"], div[class*="DivCommentItemContainer"], div[class*="CommentItem"]'
+        ) || textElement.parentElement?.parentElement || textElement.parentElement;
+        addResult(textElement, container, index);
+      });
+
+      // Fallback for class-based layouts and future TikTok DOM variations.
+      if (results.length === 0) {
+        const containers = Array.from(document.querySelectorAll(
+          '[data-e2e="comment-item"], div[class*="DivCommentItemContainer"], div[class*="CommentItem"], li[class*="Comment"]'
+        ));
+
+        containers.forEach((container, index) => {
+          const textElement = container.querySelector(
+            '[data-e2e="comment-level-1"], [data-e2e="comment-level-2"], [data-e2e*="comment-text"], p[class*="CommentText"], p'
+          );
+          addResult(textElement, container, index);
+        });
+      }
+
+      return results;
     });
 
     return raw.map((item) => {
@@ -83,25 +104,27 @@ class BrowserManager {
     if (!this.page) throw new Error('TikTok browser is not open.');
 
     const success = await this.page.evaluate(async ({ domIndex, reply }) => {
-      const selectors = [
-        '[data-e2e="comment-level-1"]',
-        '[data-e2e="comment-item"]',
-        'div[class*="DivCommentItemContainer"]',
-        'div[class*="CommentItem"]'
-      ];
-      let nodes = [];
-      for (const selector of selectors) {
-        const found = Array.from(document.querySelectorAll(selector));
-        if (found.length > nodes.length) nodes = found;
-      }
-      const node = nodes[domIndex];
+      const textNodes = Array.from(document.querySelectorAll(
+        '[data-e2e="comment-level-1"], [data-e2e="comment-level-2"], [data-e2e*="comment-text"]'
+      ));
+      const textNode = textNodes[domIndex];
+      const node = textNode?.closest(
+        '[data-e2e="comment-item"], div[class*="DivCommentItemContainer"], div[class*="CommentItem"]'
+      ) || textNode?.parentElement?.parentElement;
+
       if (!node) return false;
-      const replyButton = Array.from(node.querySelectorAll('button, span')).find((el) => /reply/i.test(el.textContent || ''));
+      const replyButton = Array.from(node.querySelectorAll('button, span, div')).find((el) => /^reply$/i.test((el.textContent || '').trim()));
       if (!replyButton) return false;
       replyButton.click();
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const editor = document.querySelector('[contenteditable="true"][data-e2e*="comment"], div[contenteditable="true"]');
+      await new Promise((resolve) => setTimeout(resolve, 700));
+
+      const editors = Array.from(document.querySelectorAll('[contenteditable="true"]'));
+      const editor = editors.find((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
       if (!editor) return false;
+
       editor.focus();
       document.execCommand('selectAll', false, null);
       document.execCommand('insertText', false, reply);
