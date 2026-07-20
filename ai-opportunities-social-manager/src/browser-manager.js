@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
@@ -10,12 +11,20 @@ class BrowserManager {
 
   async open(url = 'https://www.tiktok.com/') {
     if (!this.context) {
-      const profileDir = path.join(__dirname, '..', 'browser-profile');
+      const configuredDir = process.env.CHROME_USER_DATA_DIR?.trim();
+      const profileDir = configuredDir
+        ? path.resolve(configuredDir)
+        : path.join(__dirname, '..', 'chrome-profile');
+
+      fs.mkdirSync(profileDir, { recursive: true });
+
       this.context = await chromium.launchPersistentContext(profileDir, {
+        channel: 'chrome',
         headless: false,
         viewport: null,
         args: ['--start-maximized'],
       });
+
       this.context.on('close', () => {
         this.context = null;
         this.page = null;
@@ -24,11 +33,19 @@ class BrowserManager {
 
     this.page = this.context.pages()[0] || await this.context.newPage();
     await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    return { open: true, url: this.page.url() };
+    return {
+      open: true,
+      url: this.page.url(),
+      profileType: 'dedicated-google-chrome',
+    };
   }
 
   status() {
-    return { open: Boolean(this.context && this.page), url: this.page?.url() || null };
+    return {
+      open: Boolean(this.context && this.page),
+      url: this.page?.url() || null,
+      profileType: 'dedicated-google-chrome',
+    };
   }
 
   async scanVisibleComments() {
@@ -56,8 +73,6 @@ class BrowserManager {
         results.push({ text, author, domIndex: index });
       };
 
-      // TikTok commonly places data-e2e="comment-level-1" on the text itself,
-      // rather than on the full comment container.
       const directTextNodes = Array.from(document.querySelectorAll(
         '[data-e2e="comment-level-1"], [data-e2e="comment-level-2"], [data-e2e*="comment-text"]'
       ));
@@ -69,7 +84,6 @@ class BrowserManager {
         addResult(textElement, container, index);
       });
 
-      // Fallback for class-based layouts and future TikTok DOM variations.
       if (results.length === 0) {
         const containers = Array.from(document.querySelectorAll(
           '[data-e2e="comment-item"], div[class*="DivCommentItemContainer"], div[class*="CommentItem"], li[class*="Comment"]'
