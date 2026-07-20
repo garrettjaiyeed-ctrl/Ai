@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Opportunities Social Manager</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <span class="badge">AI OPPORTUNITIES</span>
+        <h1>Social Manager</h1>
+        <p>Amore TikTok comment assistant — AI drafts, you approve, TikTok posts.</p>
+      </div>
+      <div id="status" class="status">Checking…</div>
+    </header>
+
+    <section class="panel controls">
+      <label for="videoUrl">TikTok video URL</label>
+      <div class="url-row">
+        <input id="videoUrl" placeholder="https://www.tiktok.com/@account/video/..." />
+        <button id="openBtn" class="primary">Open TikTok</button>
+      </div>
+      <div class="actions">
+        <button id="scanBtn" class="primary">Scan visible comments</button>
+        <button id="refreshBtn">Refresh queue</button>
+        <button id="clearBtn" class="danger">Clear queue</button>
+      </div>
+      <p class="hint">Open the video in the launched browser, open comments, scroll to load them, then scan.</p>
+      <div id="message" class="message"></div>
+    </section>
+
+    <section class="metrics">
+      <article><strong id="totalCount">0</strong><span>Total</span></article>
+      <article><strong id="draftedCount">0</strong><span>Drafted</span></article>
+      <article><strong id="flaggedCount">0</strong><span>Flagged</span></article>
+      <article><strong id="insertedCount">0</strong><span>Inserted</span></article>
+    </section>
+
+    <section class="panel">
+      <div class="queue-head">
+        <h2>Comment queue</h2>
+        <span id="queueCount">0 comments</span>
+      </div>
+      <div id="queue" class="queue empty">No comments yet.</div>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

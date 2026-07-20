@@ -1,0 +1,8 @@
+node_modules/
+.env
+browser-profile/
+data/*.json
+config/clients/*.json
+!config/clients/*.example.json
+npm-debug.log*
+.DS_Store
